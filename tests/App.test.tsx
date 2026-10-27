@@ -6,8 +6,8 @@ describe('App', () => {
   it('renders the application heading', () => {
     render(<App />)
 
-    const heading = screen.getByRole('heading', { level: 1, name: 'JSON Formatter' })
+    const heading = screen.queryByRole('heading', { level: 1, name: 'JSON Formatter' })
 
-    expect(heading).toBeDefined()
+    expect(heading).not.toBeNull()
   })
 })
