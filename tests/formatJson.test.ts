@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  EMPTY_INPUT_MESSAGE,
   findErrorLocation,
   findUnexpectedCharacter,
   formatJson,
+  getErrorSnippet,
+  minifyJson,
   positionToLineColumn,
 } from '../src/utils/formatJson.ts'
 
@@ -47,8 +50,12 @@ describe('formatJson', () => {
     expect(formatJson('{"a":1}', 4)).toEqual({ ok: true, formatted: '{\n    "a": 1\n}' })
   })
 
+  it('supports tab indentation', () => {
+    expect(formatJson('{"a":[1]}', '\t')).toEqual({ ok: true, formatted: '{\n\t"a": [\n\t\t1\n\t]\n}' })
+  })
+
   it('rejects empty and whitespace-only input with a friendly message', () => {
-    const expected = { ok: false, error: { message: 'Please enter some JSON to format.' } }
+    const expected = { ok: false, error: { message: EMPTY_INPUT_MESSAGE } }
 
     expect(formatJson('')).toEqual(expected)
     expect(formatJson('   \n\t ')).toEqual(expected)
@@ -70,25 +77,72 @@ describe('formatJson', () => {
     }
   })
 
-  it('reports where a syntax error occurred', () => {
+  it('reports where a syntax error occurred and why', () => {
     const result = formatJson('{\n  "a": 1,\n  "b": 2,\n}')
 
     expect(result).toEqual({
       ok: false,
       error: {
-        message: 'Invalid JSON at line 4, column 1.',
-        location: { line: 4, column: 1 },
+        message:
+          'Invalid JSON on line 3. Trailing commas are not allowed. Remove the comma before "}".',
+        location: { line: 3, column: 9 },
+        snippet: { text: '  "b": 2,', pointerIndex: 8 },
       },
     })
   })
 
-  it('names the unexpected character when no location is available', () => {
+  it('shows the faulty line with the error position marked', () => {
+    const result = formatJson('{\n  "name": "Ada",\n  "age": 36 37\n}')
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        message: expect.stringMatching(/^Invalid JSON on line 3\. .*Is a comma missing\?$/),
+        snippet: { text: '  "age": 36 37', pointerIndex: 12 },
+      },
+    })
+  })
+
+  it('locates errors that the browser does not locate', () => {
+    // Chrome and Node report "Unexpected token 'x'" here without any position.
     const result = formatJson('{"a": x}')
 
-    expect(result.ok).toBe(false)
-    if (!result.ok) {
-      expect(result.error.message).toMatch(/^Invalid JSON\. (Unexpected character "x"\.|.*line 1)/)
-    }
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        message: expect.stringMatching(/^Invalid JSON on line 1\. Unexpected text/),
+        location: { line: 1, column: 7 },
+      },
+    })
+  })
+})
+
+describe('minifyJson', () => {
+  it('removes all whitespace from formatted JSON', () => {
+    const result = minifyJson('{\n  "name": "Ada",\n  "tags": [ 1, 2 ],\n  "nested": { "a": null }\n}')
+
+    expect(result).toEqual({ ok: true, formatted: '{"name":"Ada","tags":[1,2],"nested":{"a":null}}' })
+  })
+
+  it('keeps whitespace inside strings', () => {
+    expect(minifyJson('{ "text": "hello  world\\n" }')).toEqual({
+      ok: true,
+      formatted: '{"text":"hello  world\\n"}',
+    })
+  })
+
+  it('accepts top-level primitives', () => {
+    expect(minifyJson(' true ')).toEqual({ ok: true, formatted: 'true' })
+  })
+
+  it('rejects empty input with a friendly message', () => {
+    expect(minifyJson('  ')).toEqual({ ok: false, error: { message: EMPTY_INPUT_MESSAGE } })
+  })
+
+  it('reports invalid JSON the same way as formatJson', () => {
+    const input = '{\n  "a": 1,\n}'
+
+    expect(minifyJson(input)).toEqual(formatJson(input))
   })
 })
 
@@ -117,6 +171,42 @@ describe('findErrorLocation', () => {
 
   it('returns undefined when the message has no location', () => {
     expect(findErrorLocation('Unexpected end of JSON input', '{')).toBeUndefined()
+  })
+})
+
+describe('getErrorSnippet', () => {
+  it('returns the whole line when it is short', () => {
+    expect(getErrorSnippet('{\n  "a": x\n}', { line: 2, column: 8 })).toEqual({
+      text: '  "a": x',
+      pointerIndex: 7,
+    })
+  })
+
+  it('shortens long lines around the error', () => {
+    const line = `${'a'.repeat(100)}X${'b'.repeat(100)}`
+    const snippet = getErrorSnippet(line, { line: 1, column: 101 })
+
+    expect(snippet?.text).toBe(`…${'a'.repeat(30)}X${'b'.repeat(29)}…`)
+    expect(snippet?.text[snippet.pointerIndex]).toBe('X')
+  })
+
+  it('replaces tabs so the pointer lines up', () => {
+    expect(getErrorSnippet('\t\tx', { line: 1, column: 3 })).toEqual({ text: '  x', pointerIndex: 2 })
+  })
+
+  it('ignores Windows line endings', () => {
+    expect(getErrorSnippet('{\r\n  x\r\n}', { line: 2, column: 3 })).toEqual({
+      text: '  x',
+      pointerIndex: 2,
+    })
+  })
+
+  it('points just past the end when the error is at the end of a line', () => {
+    expect(getErrorSnippet('[1,', { line: 1, column: 4 })).toEqual({ text: '[1,', pointerIndex: 3 })
+  })
+
+  it('returns undefined when the line does not exist', () => {
+    expect(getErrorSnippet('{}', { line: 3, column: 1 })).toBeUndefined()
   })
 })
 
