@@ -7,6 +7,12 @@ export const DEFAULT_INDENT: Indent = 2
 
 export const EMPTY_INPUT_MESSAGE = 'Please enter some JSON first.'
 
+export const TOO_DEEP_MESSAGE =
+  'This JSON is valid, but it is nested too deeply to format in the browser.'
+
+/** Byte order mark that some editors (e.g. Windows Notepad) put at the start of a file. */
+const BYTE_ORDER_MARK = '﻿'
+
 export interface ErrorLocation {
   line: number
   column: number
@@ -47,19 +53,37 @@ export function minifyJson(input: string): FormatResult {
   return transformJson(input, (parsed) => JSON.stringify(parsed))
 }
 
-function transformJson(input: string, serialize: (parsed: unknown) => string): FormatResult {
+function transformJson(rawInput: string, serialize: (parsed: unknown) => string): FormatResult {
+  // The mark is invisible, so an error pointing at it would only confuse the user.
+  const input = rawInput.startsWith(BYTE_ORDER_MARK) ? rawInput.slice(1) : rawInput
+
   if (input.trim() === '') {
     return { ok: false, error: { message: EMPTY_INPUT_MESSAGE } }
   }
 
+  let parsed: unknown
   try {
-    const parsed: unknown = JSON.parse(input)
-    return { ok: true, formatted: serialize(parsed) }
+    parsed = JSON.parse(input)
   } catch (error) {
     return { ok: false, error: describeParseError(error, input) }
   }
+
+  // Parsing succeeded, so a failure here is not a syntax error. In practice it is
+  // JSON.stringify running out of stack on extremely deep nesting.
+  try {
+    return { ok: true, formatted: serialize(parsed) }
+  } catch {
+    return { ok: false, error: { message: TOO_DEEP_MESSAGE } }
+  }
 }
 
+/**
+ * Turns a JSON.parse failure into a message for the user.
+ *
+ * First asks our own scanner (findSyntaxError) for the exact position and reason, since
+ * it behaves the same in every browser. If the scanner cannot tell, falls back to
+ * whatever position or character the browser's error message mentions.
+ */
 function describeParseError(error: unknown, input: string): FormatError {
   const issue = findSyntaxError(input)
   if (issue) {
