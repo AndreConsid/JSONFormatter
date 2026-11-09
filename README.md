@@ -6,6 +6,14 @@ The tool solves the problem of working with poorly formatted or difficult-to-rea
 
 All processing happens locally in the browser. No JSON is sent to a server.
 
+## Features
+
+- **Format** JSON with 2 spaces, 4 spaces or tabs
+- **Minify** JSON by removing all whitespace
+- **Validate** JSON with clear error messages, including line and column when available
+- **Copy** the result to the clipboard
+- **Load** a local `.json` file (up to 5 MB) into the editor
+
 ## Requirements
 
 - Node.js 22.12 or later (the project uses Node 24, see `.nvmrc`)
@@ -37,10 +45,15 @@ The development server runs at http://localhost:5173.
 
 ```text
 src/
+  components/   UI components (editor, copy button, file loader, indentation picker)
+  utils/        JSON formatting, minifying and validation logic
   App.tsx       Root component
   main.tsx      Application entry point
   index.css     Base styles
 tests/          Automated tests (Vitest)
 ```
 
-JSON processing logic will live in `src/utils/` and UI components in `src/components/` as they are added.
+## Known limitations
+
+- Numbers beyond JavaScript's safe integer range (e.g. `12345678901234567890`) lose precision when formatted, because parsing uses the native `JSON.parse`.
+- Duplicate keys in an object are collapsed to the last value.
