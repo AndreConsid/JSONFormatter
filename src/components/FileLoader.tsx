@@ -2,6 +2,12 @@ import type { ChangeEvent } from 'react'
 
 export const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
 
+const BYTES_PER_MEGABYTE = 1024 * 1024
+
+function formatMegabytes(bytes: number): string {
+  return `${Number((bytes / BYTES_PER_MEGABYTE).toFixed(1))} MB`
+}
+
 interface FileLoaderProps {
   onLoad: (text: string) => void
   onError: (message: string) => void
@@ -16,15 +22,30 @@ function FileLoader({ onLoad, onError }: FileLoaderProps) {
     if (!file) return
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      onError('The file is too large. The maximum size is 5 MB.')
+      onError(
+        `"${file.name}" is too large (${formatMegabytes(file.size)}). ` +
+          `The maximum size is ${formatMegabytes(MAX_FILE_SIZE_BYTES)}.`,
+      )
       return
     }
 
+    let text: string
     try {
-      onLoad(await file.text())
+      text = await file.text()
     } catch {
-      onError('The file could not be read.')
+      onError(
+        `"${file.name}" could not be read. Check that the file still exists and that you have ` +
+          'permission to open it, or paste its contents instead.',
+      )
+      return
     }
+
+    if (text.trim() === '') {
+      onError(`"${file.name}" is empty.`)
+      return
+    }
+
+    onLoad(text)
   }
 
   return (

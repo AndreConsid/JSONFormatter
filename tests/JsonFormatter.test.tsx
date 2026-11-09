@@ -212,11 +212,22 @@ describe('JsonFormatter', () => {
     it('rejects files that are too large', async () => {
       render(<JsonFormatter />)
       const largeFile = new File(['{}'], 'large.json', { type: 'application/json' })
-      Object.defineProperty(largeFile, 'size', { value: MAX_FILE_SIZE_BYTES + 1 })
+      Object.defineProperty(largeFile, 'size', { value: MAX_FILE_SIZE_BYTES * 1.5 })
 
       chooseFile(largeFile)
 
-      await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/too large/))
+      await waitFor(() => expect(screen.getByRole('alert').textContent).toBe(
+        '"large.json" is too large (7.5 MB). The maximum size is 5 MB.',
+      ))
+      expect(getInput().value).toBe('')
+    })
+
+    it('tells the user when the file is empty', async () => {
+      render(<JsonFormatter />)
+
+      chooseFile(new File(['  \n'], 'empty.json', { type: 'application/json' }))
+
+      await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('"empty.json" is empty.'))
       expect(getInput().value).toBe('')
     })
 
@@ -228,7 +239,7 @@ describe('JsonFormatter', () => {
       chooseFile(brokenFile)
 
       await waitFor(() =>
-        expect(screen.getByRole('alert').textContent).toBe('The file could not be read.'),
+        expect(screen.getByRole('alert').textContent).toMatch(/^"broken\.json" could not be read\./),
       )
     })
   })

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   EMPTY_INPUT_MESSAGE,
+  TOO_DEEP_MESSAGE,
   findErrorLocation,
   findUnexpectedCharacter,
   formatJson,
@@ -59,6 +60,22 @@ describe('formatJson', () => {
 
     expect(formatJson('')).toEqual(expected)
     expect(formatJson('   \n\t ')).toEqual(expected)
+  })
+
+  it('ignores a byte order mark at the start of the input', () => {
+    expect(formatJson('\uFEFF{"a":1}')).toEqual({ ok: true, formatted: '{\n  "a": 1\n}' })
+  })
+
+  it('treats input that is only a byte order mark as empty', () => {
+    expect(formatJson('\uFEFF')).toEqual({ ok: false, error: { message: EMPTY_INPUT_MESSAGE } })
+  })
+
+  it('does not call valid JSON invalid when it is nested too deeply to format', () => {
+    const depth = 100_000
+    const deeplyNested = '['.repeat(depth) + ']'.repeat(depth)
+
+    expect(formatJson(deeplyNested)).toEqual({ ok: false, error: { message: TOO_DEEP_MESSAGE } })
+    expect(minifyJson(deeplyNested)).toEqual({ ok: false, error: { message: TOO_DEEP_MESSAGE } })
   })
 
   it.each([
