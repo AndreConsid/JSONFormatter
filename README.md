@@ -41,6 +41,18 @@ The development server runs at http://localhost:5173.
 | `npm run test:watch` | Run the tests in watch mode |
 | `npm run lint` | Lint the code with oxlint |
 
+## Deployment
+
+The app is deployed to GitHub Pages: https://andreconsid.github.io/JSONFormatter/
+
+A GitHub Actions workflow (`.github/workflows/deploy.yml`) runs on every push and pull request to `main`:
+
+1. Installs dependencies with `npm ci`
+2. Runs the linter, the tests and the production build. Any failure stops the pipeline.
+3. On push to `main` only: deploys `dist/` to GitHub Pages
+
+No custom secrets are needed. Deployment uses the automatic `GITHUB_TOKEN`.
+
 ## Project structure
 
 ```text
